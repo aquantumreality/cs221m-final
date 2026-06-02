@@ -98,22 +98,34 @@ cs221m-final/
 - [x] `walkthrough.ipynb` sections 1–8 fully written and runnable
 - [x] §5 fine-tuning section added (was missing, caused near-chance IIA)
 - [x] Repo pushed to `github.com/aquantumreality/cs221m-final`
+- [x] **§9–13 rewritten to faithfully replicate the pyvene MQNLI tutorial** (June 2026).
+  Replaced the hand-rolled symbolic-model + premise-token-patching approach (which produced
+  all-NaN MQNLI results) with the tutorial's exact method: pyvene `CausalModel`,
+  `create_gpt2_lm` factual training (relation-word target, fixed-length tokenization,
+  factual gate), `generate_counterfactual_dataset`, and `RotatedSpaceIntervention` at a
+  single decision position (`MAX_LENGTH-2`, layer 10). Reference followed:
+  `cs221m-das-mqnli/notebooks/MQNLI_DAS_experiments_updated.ipynb` and `MQNLI_original.ipynb`.
+
+## MQNLI section design (§9–13, faithful pyvene replication)
+
+- **§9** builds the 33-variable `CausalModel` (parents/values/functions inlined from the 5 signature JSONs).
+- **§10** trains GPT-2 via `create_gpt2_lm` with HF `Trainer`; `preprocess_logits_for_metrics`
+  reduces logits to argmax to avoid OOM on the 1000-example eval set. Gate = 0.90 (project) / 0.80 (smoke).
+- **§11** runs DAS for `QP_S` (root sanity) and `NegP` (headline), + wrong-variable and shuffled-label controls.
+- **§12** composition: joint `do(NegP=src_A, NP_S=src_B)` via TWO `RotatedSpaceIntervention`s at one
+  site on orthogonal subspace partitions `[0,d]`/`[d,2d]`, subspaces `[[[0]]*bs, [[1]]*bs]`
+  (multi-intervention pattern from `reference/01_das_original_hierarchical_equality.ipynb`).
+  NOTE: `NegP`+`QP_O` is degenerate (QP_O is an ancestor of NegP), so we compose NegP with the
+  subject-branch variable `NP_S` instead.
+- **§13** calibration: re-run NegP DAS on a randomly-initialized `GPT2LMHeadModel`.
+- Toggle scale with `RUN_SMOKE_TEST` (False = Colab-Pro full run). Each DAS run uses
+  `copy.deepcopy(mq_base_model)` so a fresh base model is wrapped per intervention.
 
 ## What's next (in order)
 
-1. **§9 — MQNLI causal model**: fill in `load_mqnli_causal_model()` in `nli_das/causal_models.py`. Uses pyvene's `CausalModel` + 5 JSON signature files in `tutorial_data/`. Reference: `notebooks/reference/01_das_original_hierarchical_equality.ipynb` in old repo; Amir's MQNLI pyvene tutorial.
-
-2. **§10 — Fine-tune GPT-2 on MQNLI**: train on factual MQNLI dataset (load from HuggingFace or generate from causal model). Must reach >90% factual accuracy before DAS. ~10k examples × 10 epochs.
-
-3. **§11 — DAS on MQNLI**: two targets:
-   - `QP_S` (final label) — sanity check
-   - `NegP` (first true intermediate) — the interesting result
-
-4. **§12 — Composition**: `do(NegP=src_A, QP_O=src_B)` — two simultaneous interchange interventions. Train rotations independently, apply jointly, compare to symbolic `do(NegP=v_A, QP_O=v_B)`.
-
-5. **§13 — Calibration**: re-run lexical DAS at same site on a randomly-initialized GPT-2. Report IIA to bound how much is "alignment capacity" vs learned structure.
-
-6. **report.md** — 1-2 page final report summarizing all results.
+1. **Run §9–13 on Colab Pro** with `RUN_SMOKE_TEST=False` and confirm: factual acc ≥ 0.90,
+   QP_S IIA high, NegP IIA well above wrong-variable/shuffled/random-init, joint composition IIA above majority.
+2. **report.md** — 1-2 page final report summarizing all results.
 
 ---
 
